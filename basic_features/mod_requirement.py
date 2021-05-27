@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import fnmatch
+import itertools
 import os
-import pathlib
 import types
 from collections import defaultdict
 from dataclasses import InitVar, dataclass, field
@@ -58,7 +58,7 @@ class IWithModRequirements:
             `get_mod_file_map`
         """
         return (
-            RequirementModFiles(req, get_mod_file_map(mod_files, organizer))
+            RequirementModFiles(req, get_mod_origin_file_map(mod_files, organizer))
             for req, mod_files in self.files_with_missing_requirements(organizer)
         )
 
@@ -73,63 +73,31 @@ class IWithModRequirements:
         )
 
 
-def get_mod_file_map(
-    abs_file_paths: Iterable[str], organizer: mobase.IOrganizer
+def get_mod_origin_file_map(
+    file_paths: Iterable[str], organizer: mobase.IOrganizer
 ) -> Mapping[str, list[str]]:
     """
     Args:
-        abs_file_paths: absolute file paths, as returned by
-            `mobase.IOrganizer.findFiles`.
+        file_paths: file paths, relative to data folder.
         organizer: `mobase.IOrganizer`
 
     Returns:
         Mapping::
 
             {
-                "mod name": ["mod files (relative paths)"],
+                "mod name": ["mod files"],
                 "": ["files without mod origin"]
             }
     """
     mod_map: defaultdict[str, list[str]] = defaultdict(list)
-    for abs_file in abs_file_paths:
-        rel_file = relative_to_data_folder(abs_file, organizer)
-        if rel_file is None:
-            continue
-        mods = organizer.getFileOrigins(rel_file)
+    for path in file_paths:
+        mods = organizer.getFileOrigins(path)
         if mods:
             for mod in mods:
-                mod_map[mod].append(rel_file)
+                mod_map[mod].append(path)
         else:
-            mod_map[""].append(rel_file)
+            mod_map[""].append(path)
     return mod_map
-
-
-def relative_to_data_folder(
-    file_path: str, organizer: mobase.IOrganizer
-) -> Optional[str]:
-    """Get the file path relative to the data folder from the real absolute mod folder
-    path.
-
-    Args:
-        file_path: The real absolute file path, as returned by `IOrganizer.findFiles`
-        organizer: `mobase.IOrganizer` instance
-
-    Returns:
-        Path relative to the data folder or ``None`` if `file_path` could not be
-        converted to a relative path.
-    """
-    try:
-        # mods path
-        path_rel_to_mods = pathlib.PurePath(file_path).relative_to(organizer.modsPath())
-        return os.path.join(*path_rel_to_mods.parts[1:])
-    except ValueError:
-        try:
-            # overwrite path
-            return str(
-                pathlib.PurePath(file_path).relative_to(organizer.overwritePath())
-            )
-        except ValueError:
-            return None
 
 
 SelfType = TypeVar("SelfType", bound="ModRequirement")
@@ -267,13 +235,29 @@ class ModRequirement:
 
 
 def find(path: str, organizer: mobase.IOrganizer) -> list[str]:
-    """Find files or folders matching path. Placeholder supported in tail / last path
-    segment."""
-    folder, file = os.path.split(path)
-    if file:
-        return organizer.findFiles(folder, file)
-    path, folder = os.path.split(folder)
-    return fnmatch.filter(organizer.listDirectories(path), folder)
+    """Find files or folders matching path (relative to data folder).
+    Glob pattern supported in tail / last path segment.
+
+    Returns:
+        A list of normalized paths, relative to data folder.
+    """
+    parent, child = os.path.split(path)
+    files: Iterable[str]
+    if child:
+        files = (
+            os.path.basename(abs_path)
+            for abs_path in organizer.findFiles(parent, child)
+        )
+    else:
+        files = ()
+        parent, child = os.path.split(parent)
+    children = itertools.chain(
+        fnmatch.filter(organizer.listDirectories(parent), child), files
+    )
+    if not parent:
+        return list(children)
+    parent = os.path.normpath(parent)
+    return [os.path.join(parent, child) for child in children]
 
 
 def nexus_url(game: mobase.IPluginGame, nexus_id: int) -> str:
