@@ -67,7 +67,7 @@ class ValheimGame(IUsesBepInEx, BasicGame):
                 ),
                 ModRequirementMapping(
                     "CustomTextures",
-                    nexus_id=21,
+                    nexus_id=48,
                     required_by=[
                         # Includes directories, gets expanded to CustomTextures/*
                         "BepInEx/plugins/CustomTextures/*",
