@@ -16,7 +16,7 @@ class SubnauticaBelowZeroGame(game_subnautica.SubnauticaGame):
     GameNexusName = "subnauticabelowzero"
     GameSteamId = 848450
     GameBinary = "SubnauticaZero.exe"
-    GameDataPath = ""
+    GameDataPath = "_ROOT"
     GameDocumentsDirectory = "%GAME_PATH%"
     GameSavesDirectory = r"%GAME_PATH%\SNAppData\SavedGames"
 
