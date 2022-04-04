@@ -9,7 +9,7 @@ class SubnauticaBelowZeroGame(game_subnautica.SubnauticaGame):
 
     Name = "Subnautica Below Zero Support Plugin"
     Author = "dekart811, Zash"
-    Version = "2.0"
+    Version = "2.1"
 
     GameName = "Subnautica: Below Zero"
     GameShortName = "subnauticabelowzero"
