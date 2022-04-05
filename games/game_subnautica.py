@@ -5,7 +5,7 @@ import os
 from collections.abc import Iterable
 from pathlib import Path
 
-from PyQt5.QtCore import QDir, qInfo, qWarning
+from PyQt5.QtCore import QDir, qWarning
 
 import mobase
 
@@ -124,15 +124,16 @@ class SubnauticaGame(BasicGame, mobase.IPluginFileMapper):
             for child in mod_path.iterdir():
                 # Check blacklist
                 if child.name.casefold() in self._root_blacklist:
-                    qInfo(f"Skipping {child.name} ({mod_name})")
+                    qWarning(f"Skipping {child.name} ({mod_name})")
                     continue
                 destination = game_path / child.name
                 # Check existing
                 if destination.exists():
                     qWarning(
-                        f"Existing game files/folders are not linked: "
+                        f"Overwriting of existing game files/folders is not supported! "
                         f"{destination.as_posix()} ({mod_name})"
                     )
+                    continue
                 # Mapping: mod -> root
                 yield mobase.Mapping(
                     source=str(child),
