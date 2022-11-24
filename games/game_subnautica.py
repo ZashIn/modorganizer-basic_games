@@ -1,8 +1,8 @@
 from __future__ import annotations
-from enum import Enum
 
 import os
 from collections.abc import Iterable
+from enum import Enum
 from pathlib import Path
 
 from PyQt6.QtCore import QDir, qWarning
@@ -82,7 +82,7 @@ class SubnauticaGame(BasicGame, mobase.IPluginFileMapper):
         super().init(organizer)
         self._featureMap[mobase.ModDataChecker] = SubnauticaModDataChecker()
         self._featureMap[mobase.SaveGameInfo] = BasicGameSaveGameInfo(
-            lambda s: os.path.join(s, "screenshot.jpg")
+            lambda s: Path(s or "", "screenshot.jpg")
         )
         return True
 
