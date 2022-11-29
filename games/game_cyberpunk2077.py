@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 try:
-    from PyQt6.QtCore import QDir, qInfo
+    from PyQt6.QtCore import QDir, QFileInfo, qInfo
 except ImportError:
-    from PyQt5.QtCore import QDir, qInfo  # type: ignore
+    from PyQt5.QtCore import QDir, QFileInfo, qInfo  # type: ignore
 
 import mobase
 
@@ -18,7 +18,9 @@ from ..basic_game import BasicGame
 
 
 class CyberpunkModDataChecker(BasicModDataChecker):
-    default_file_patterns = {"valid": ["archive", "bin", "engine", "r6", "red4ext"]}
+    default_file_patterns = {
+        "valid": ["archive", "bin", "engine", "r6", "red4ext", "mods"]
+    }
 
 
 # class CyberpunkModDataChecker(BasicModDataChecker):
@@ -100,8 +102,66 @@ class Cyberpunk2077Game(BasicGame):
 
         return True
 
+    def settings(self) -> list[mobase.PluginSetting]:
+        return [
+            mobase.PluginSetting(
+                "skipStartScreen",
+                'Skips the "Breaching..." start screen on game launch.',
+                True,
+            )
+        ]
+
     def primaryPlugins(self):
         return ["RootBuilder"]
+
+    def executables(self) -> list[mobase.ExecutableInfo]:
+        # TODO: run args = --skip-launcher -skipStartScreen / -modded
+        game_dir = self.gameDirectory()
+        bin_path = QFileInfo(game_dir.absoluteFilePath(self.binaryName()))
+        without_redmod = mobase.ExecutableInfo(self.gameName(), bin_path).withArgument(
+            "--launcher-skip"
+        )
+        with_redmod = mobase.ExecutableInfo(
+            f"{self.gameName()} + REDmod",
+            bin_path,
+        ).withArgument("-modded")
+        if self._organizer.pluginSetting(self.name(), "skipStartScreen"):
+            without_redmod = without_redmod.withArgument("-skipStartScreen")
+            with_redmod = with_redmod.withArgument("-skipStartScreen")
+
+        # BUG: redmod + redscript
+        # def run_callback(path: str):
+        #     # TODO: callback with args?
+        #     qInfo(f"run {path} == {bin_path.absoluteFilePath()}")
+        #     if path == bin_path.absoluteFilePath():
+        #         app = self._organizer.startApplication("REDmod deploy only")
+        #         qInfo("run before: " + str(app))
+        #         self._organizer.waitForApplication(app)
+        #     return True
+
+        # self._organizer.onAboutToRun(run_callback)
+
+        return [
+            without_redmod,
+            with_redmod,
+            mobase.ExecutableInfo(
+                "REDmod deploy only",
+                QFileInfo(game_dir.absoluteFilePath("tools/redmod/bin/redMod.exe")),
+            ).withArgument(
+                f'deploy -root= "{game_dir.absolutePath()}"'
+                " -rttiSchemaPath="
+                f' "{game_dir.absoluteFilePath("tools/redmod/bin/../metadata.json")}"'
+                " -reportProgress"
+            )
+            # .withArgument("deploy")
+            # .withArgument("-root=")
+            # .withArgument(f'"{game_dir.absolutePath()}"')
+            # .withArgument("-rttiSchemaPath= ")
+            # .withArgument(
+            #     f'"{game_dir.absoluteFilePath("tools/redmod/bin/../metadata.json")}"'
+            # )
+            # .withArgument("-reportProgress")
+        ]
 
     def executableForcedLoads(self) -> list[mobase.ExecutableForcedLoadSetting]:
         return [
