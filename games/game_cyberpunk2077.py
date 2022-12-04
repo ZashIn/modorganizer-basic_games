@@ -122,6 +122,29 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
         self._organizer.onAboutToRun(self._pre_run_callback)
         return True
 
+    def _pre_run_callback(self, path: str) -> bool:
+        """Deploy redmod before gamelaunch if necessary."""
+        if not self._is_redmod_installed():
+            return True
+        # TODO: run redmod only if started via "-modded"
+        if not self._organizer.pluginSetting(self.name(), "predeploy_redmod"):
+            return True
+        if path == self.gameDirectory().absoluteFilePath(self.binaryName()):
+            if (res := self._redmod_deploy()) and not bool(res[0]):
+                # TODO: show redmod deploy error
+                return False
+        return True
+
+    def _is_redmod_installed(self) -> bool:
+        return self.gameDirectory().exists("tools/redmod/bin/redMod.exe")
+
+    def _redmod_deploy(self) -> tuple[bool, int] | None:
+        if not self._is_redmod_installed():
+            return None
+        return self._organizer.waitForApplication(
+            self._organizer.startApplication("REDmod deploy only")
+        )
+
     def _set_root_builder_settings(self) -> None:
         if not self._organizer.isPluginEnabled("RootBuilder"):
             qWarning("RootBuilder not enabled, but required for most mods!")
@@ -158,25 +181,6 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
             ),
         ]
 
-    def _pre_run_callback(self, path: str) -> bool:
-        # TODO: run redmod only if started via "-modded"
-        if not self._organizer.pluginSetting(self.name(), "predeploy_redmod"):
-            return True
-        if path == self.gameDirectory().absoluteFilePath(self.binaryName()):
-            if (res := self._redmod_deploy()) and not bool(res[0]):
-                # TODO: show redmod deploy error
-                return False
-        return True
-
-    def _redmod_deploy(self) -> tuple[bool, int] | None:
-        if not Path(
-            self.gameDirectory().absoluteFilePath("tools/redmod/bin/redMod.exe")
-        ).exists():
-            return None
-        return self._organizer.waitForApplication(
-            self._organizer.startApplication("REDmod deploy only")
-        )
-
     def executables(self) -> list[mobase.ExecutableInfo]:
         game_name = self.gameName()
         game_dir = self.gameDirectory()
@@ -186,28 +190,29 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
             if self._organizer.pluginSetting(self.name(), "skipStartScreen")
             else ""
         )
-        execs = [
-            # With redmod
-            mobase.ExecutableInfo(
-                f"{game_name} + REDmod",
-                bin_path,
-            ).withArgument(f"-modded{skip_start_screen}"),
-            # Without redmod
-            mobase.ExecutableInfo(game_name, bin_path).withArgument(
-                f"--launcher-skip{skip_start_screen}"
-            ),
-            # Redmod
+        redmod_installed = self._is_redmod_installed()
+        execs = []
+        # With redmod
+        if redmod_installed:
+            execs.append(
+                mobase.ExecutableInfo(
+                    f"{game_name} + REDmod",
+                    bin_path,
+                ).withArgument(f"-modded{skip_start_screen}")
+            )
+            # Redmod deploy
             # TODO: load order `-mod=modB,modA,modC` and -force (see https://github.com/E1337Kat/cyberpunk2077_ext_redux/issues/297)
-            mobase.ExecutableInfo(
-                "REDmod deploy only",
-                QFileInfo(game_dir.absoluteFilePath("tools/redmod/bin/redMod.exe")),
-            ).withArgument(
-                f'deploy -root= "{game_dir.absolutePath()}"'
-                " -rttiSchemaPath="
-                f' "{game_dir.absoluteFilePath("tools/redmod/bin/../metadata.json")}"'
-                " -reportProgress"
-            ),
-        ]
+            execs.append(
+                mobase.ExecutableInfo(
+                    "REDmod deploy only",
+                    QFileInfo(game_dir.absoluteFilePath("tools/redmod/bin/redMod.exe")),
+                ).withArgument(
+                    f'deploy -root= "{game_dir.absolutePath()}"'
+                    " -rttiSchemaPath="
+                    f' "{game_dir.absoluteFilePath("tools/redmod/bin/../metadata.json")}"'
+                    " -reportProgress"
+                )
+            )
         if launcher_name := self.getLauncherName():
             execs.append(
                 mobase.ExecutableInfo(
@@ -215,20 +220,26 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
                     QFileInfo(game_dir.absoluteFilePath(launcher_name)),
                 ).withArgument(f"-modded{skip_start_screen}")
             )
+        # Without redmod
+        execs.append(
+            mobase.ExecutableInfo(game_name, bin_path).withArgument(
+                f"--launcher-skip{skip_start_screen}"
+            )
+        )
         return execs
 
     # Not needed with RootBuilder links / copies
-    # def executableForcedLoads(self) -> list[mobase.ExecutableForcedLoadSetting]:
-    #     return [
-    #         mobase.ExecutableForcedLoadSetting(exe, lib).withEnabled(True)
-    #         for exe in [self.binaryName(), self.getLauncherName()]
-    #         for lib in [
-    #             "bin/x64/version.dll",  # CET
-    #             "bin/x64/d3d11.dll",  # Red4ext
-    #             "red4ext/RED4ext.dll",
-    #             "bin/x64/nvngx.dll",  # FidelityFx Super Resolution
-    #         ]
-    #     ]
+    def executableForcedLoads(self) -> list[mobase.ExecutableForcedLoadSetting]:
+        return [
+            mobase.ExecutableForcedLoadSetting(exe, lib).withEnabled(True)
+            for exe in [self.binaryName(), self.getLauncherName()]
+            for lib in [
+                "bin/x64/version.dll",  # CET
+                "bin/x64/d3d11.dll",  # Red4ext
+                "red4ext/RED4ext.dll",
+                "bin/x64/nvngx.dll",  # FidelityFx Super Resolution
+            ]
+        ]
 
     def listSaves(self, folder: QDir) -> list[mobase.ISaveGame]:
         ext = self._mappings.savegameExtension.get()
@@ -241,10 +252,13 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
         return ["UserSettings.json"]
 
     def mappings(self) -> list[mobase.Mapping]:
-        game_path = Path(self.gameDirectory().absolutePath())
-        overwrite_path = Path(self._organizer.overwritePath())
-
-        return list(self._root_mappings(game_path, overwrite_path))
+        # Custom root mappings for all folders not in `_root_mapping_blacklist`
+        return list(
+            self._root_mappings(
+                Path(self.gameDirectory().absolutePath()),
+                Path(self._organizer.overwritePath()),
+            )
+        )
 
     def _root_mappings(
         self, game_path: Path, overwrite_path: Path
@@ -255,7 +269,7 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
             for child in mod_path.iterdir():
                 # Check blacklist
                 if child.name.casefold() in self._root_mapping_blacklist:
-                    qInfo(f"Skipping {child.name} ({mod_name})")
+                    qInfo(f"Skipping mapping for {child.name} ({mod_name})")
                     continue
                 destination = game_path / child.name
                 # Mapping: mod -> root
