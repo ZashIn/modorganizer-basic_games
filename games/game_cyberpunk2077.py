@@ -31,7 +31,7 @@ class CyberpunkModDataChecker(BasicModDataChecker):
             "r6": "root/",
             "red4ext": "root/",
             # redmod
-            # "mods": "",
+            # "*": "mods",
         },
     }
 
@@ -40,30 +40,26 @@ class CyberpunkModDataChecker(BasicModDataChecker):
     ) -> mobase.ModDataChecker.CheckReturn:
         # fix: single root folders get traversed by Simple Installer
         if filetree.parent() is not None:
-            # if filetree.find("info.json"):
-            #     return self.CheckReturn.FIXABLE
-            # else:
             return self.CheckReturn.INVALID
-        res = super().dataLooksValid(filetree)
-        # TODO: redmod validation & fix
-        # if mods := filetree.find("mods", mobase.FileTreeEntry.DIRECTORY):
-        #     assert isinstance(mods, mobase.IFileTree)
-        #     self._valid_redmod(mods)
+        if (
+            res := super().dataLooksValid(filetree)
+        ) is self.CheckReturn.INVALID and all(self._valid_redmod(e) for e in filetree):
+            return self.CheckReturn.FIXABLE
         return res
 
     def fix(self, filetree: mobase.IFileTree) -> mobase.IFileTree | None:
-        tree = super().fix(filetree)
         # Check for correct redmod format
-        # if tree and (mods := tree.find("mods", mobase.FileTreeEntry.DIRECTORY)):
-        #     assert isinstance(mods, mobase.IFileTree)
-        #     for entry in mods:
-        #         if not entry.isDir() or not mods.find(f"{entry.name}/info.json"):
-        #             return None
+        tree = super().fix(filetree) or filetree
+        for entry in tree:
+            if not self._regex["valid"].match(
+                entry.name().casefold()
+            ) and self._valid_redmod(entry):
+                tree.move(entry, "mods/")
         return tree
 
-    def _valid_redmod(self, filetree: mobase.IFileTree) -> bool:
-        return bool(filetree) and all(
-            filetree.find(f"{entry.name}/info.json") for entry in filetree
+    def _valid_redmod(self, filetree: mobase.IFileTree | mobase.FileTreeEntry) -> bool:
+        return isinstance(filetree, mobase.IFileTree) and bool(
+            filetree and filetree.find("info.json")
         )
 
 
