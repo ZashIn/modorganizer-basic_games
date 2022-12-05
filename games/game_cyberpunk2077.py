@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from pathlib import Path
 
 try:
-    from PyQt6.QtCore import QDir, QFileInfo, qInfo, qWarning, qCritical
+    from PyQt6.QtCore import QDir, QFileInfo, qCritical, qInfo, qWarning
+    from PyQt6.QtWidgets import QMainWindow, QMessageBox
 except ImportError:
     from PyQt5.QtCore import QDir, QFileInfo, qInfo, qWarning, qCritical  # type: ignore
+    from PyQt5.QtWidgets import QMainWindow, QMessageBox  # type: ignore
 
 import mobase
 
@@ -105,6 +108,12 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
         ),
     }
 
+    _redmod_path = Path("tools/redmod/")
+    _redmod_binary = _redmod_path / "bin/redMod.exe"
+    _redmod_log = _redmod_path / "bin/REDmodLog.txt"
+
+    _qwindow: QMainWindow
+
     def __init__(self):
         super().__init__()
         mobase.IPluginFileMapper.__init__(self)
@@ -116,27 +125,47 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
         )
         self._featureMap[mobase.ModDataChecker] = CyberpunkModDataChecker()
 
-        self._organizer.onUserInterfaceInitialized(
-            lambda _: self._set_root_builder_settings()
-        )
+        def ui_init(window):
+            self._qwindow = window
+            self._set_root_builder_settings()
+
+        self._organizer.onUserInterfaceInitialized(ui_init)
         self._organizer.onAboutToRun(self._pre_run_callback)
         return True
 
     def _pre_run_callback(self, path: str) -> bool:
         """Deploy redmod before gamelaunch if necessary."""
-        if not self._is_redmod_installed():
-            return True
         # TODO: run redmod only if started via "-modded"
-        if not self._organizer.pluginSetting(self.name(), "predeploy_redmod"):
+        if not self._is_redmod_installed() or not self._organizer.pluginSetting(
+            self.name(), "predeploy_redmod"
+        ):
             return True
         if path == self.gameDirectory().absoluteFilePath(self.binaryName()):
-            if not (res := self._redmod_deploy()) or res[0] != 0:
-                # TODO: show redmod deploy error
+            if not self._redmod_deploy() == (True, 0):
+                qtmbox = QMessageBox(
+                    QMessageBox.Icon.Question,
+                    "REDmod deployment",
+                    (
+                        "REDmod deployment failed. Do want to see the log or"
+                        " ignore the error and start the game?"
+                    ),
+                    buttons=QMessageBox.StandardButton.Yes
+                    | QMessageBox.StandardButton.Ignore
+                    | QMessageBox.StandardButton.Cancel,
+                    parent=self._qwindow,
+                )
+                if (choice := qtmbox.exec()) == QMessageBox.StandardButton.Yes:
+                    os.startfile(
+                        self.gameDirectory().absoluteFilePath(str(self._redmod_log))
+                    )
+                    return False
+                elif choice == QMessageBox.StandardButton.Ignore:
+                    return True
                 return False
         return True
 
     def _is_redmod_installed(self) -> bool:
-        return self.gameDirectory().exists("tools/redmod/bin/redMod.exe")
+        return self.gameDirectory().exists(str(self._redmod_binary))
 
     def _redmod_deploy(self) -> tuple[bool, int] | None:
         if not self._is_redmod_installed():
@@ -152,6 +181,18 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
                 executable=redmod_exec.binary().absoluteFilePath(),
                 args=redmod_exec.arguments(),
             )
+        )
+
+    def _redmod_deploy_executable(self) -> mobase.ExecutableInfo:
+        game_dir = self.gameDirectory()
+        return mobase.ExecutableInfo(
+            "REDmod deploy only",
+            QFileInfo(game_dir.absoluteFilePath(str(self._redmod_binary))),
+        ).withArgument(
+            f'deploy -root= "{game_dir.absolutePath()}"'
+            " -rttiSchemaPath="
+            f' "{game_dir.absoluteFilePath(str(self._redmod_path / "metadata.json"))}"'
+            " -reportProgress"
         )
 
     def _redmod_load_order(self) -> Iterable[str]:
@@ -232,18 +273,6 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
             )
         )
         return execs
-
-    def _redmod_deploy_executable(self) -> mobase.ExecutableInfo:
-        game_dir = self.gameDirectory()
-        return mobase.ExecutableInfo(
-            "REDmod deploy only",
-            QFileInfo(game_dir.absoluteFilePath("tools/redmod/bin/redMod.exe")),
-        ).withArgument(
-            f'deploy -root= "{game_dir.absolutePath()}"'
-            " -rttiSchemaPath="
-            f' "{game_dir.absoluteFilePath("tools/redmod/bin/../metadata.json")}"'
-            " -reportProgress"
-        )
 
     # Not needed with RootBuilder links / copies
     def executableForcedLoads(self) -> list[mobase.ExecutableForcedLoadSetting]:
