@@ -90,7 +90,7 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
     _root_mapping_blacklist = {GameDataPath.casefold(), "root", "bin"}
 
     _root_builder_config: dict[str, mobase.MoVariant] = {
-        "usvfsmode": False,  # True,  # does not work with CET
+        "usvfsmode": True,
         "linkmode": True,
         "backup": True,
         "cache": True,
@@ -101,10 +101,10 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
         "linkextensions": (
             # redscript, red4ext
             "dll,exe"
-            # CET - does NOT work with USVFS writing to overwrite! => copy mode
+            # CET
             ",asi,lua,ini"
             ",sqlite3,json,keep,kark,lua,otf,ttf"
-            ",toml"  # redscript + cybercmd
+            ",toml,reds,redscrips,ts,bin,bk"  # redscript + cybercmd
         ),
     }
 
