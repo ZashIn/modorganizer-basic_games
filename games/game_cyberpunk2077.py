@@ -172,15 +172,15 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
             return None
         # TODO: check if `-force` is required (see https://github.com/E1337Kat/cyberpunk2077_ext_redux/issues/297)   # noqa: E501
         load_order = '" "'.join(self._redmod_load_order())
-        redmod_exec = self._redmod_deploy_executable().withArgument(
-            f'-mod= "{load_order}"'
-        )
+        redmod_exec = self._redmod_deploy_executable()
+        if load_order:
+            redmod_exec = redmod_exec.withArgument(f'-mod= "{load_order}"')
         return self._organizer.waitForApplication(
-            # self._organizer.startApplication("REDmod deploy only")
+            # self._organizer.startApplication("REDmod deploy only")  # Cannot add args
             self._organizer.startApplication(
                 executable=redmod_exec.binary().absoluteFilePath(),
                 args=redmod_exec.arguments(),
-            )
+            ),
         )
 
     def _redmod_deploy_executable(self) -> mobase.ExecutableInfo:
