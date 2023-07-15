@@ -56,9 +56,12 @@ class BasicGameSaveGameInfoWidget(mobase.ISaveGameInfoWidget):
     def __init__(
         self,
         parent: QWidget,
-        get_preview: Callable[[Path], Path | None] | None = None,
-        get_metadata: Callable[[Path, mobase.ISaveGame], Mapping[str, str] | None]
-        | None = None,
+        get_preview: Callable[
+            [Path], Path | str | QPixmap | QImage | None
+        ] = lambda p: None,
+        get_metadata: Callable[
+            [Path, mobase.ISaveGame], Mapping[str, str] | None
+        ] = lambda p, s: None,
     ):
         """
         Args:
@@ -104,11 +107,11 @@ class BasicGameSaveGameInfoWidget(mobase.ISaveGameInfoWidget):
                 w.deleteLater()
 
         # Retrieve the pixmap and metadata:
-        preview = self._get_preview and self._get_preview(save_path)
+        preview = self._get_preview(save_path)
         pixmap = None
 
         # Set the preview pixmap if the preview file exits
-        if preview is not None and preview.exists():
+        if preview:
             if isinstance(preview, Path):
                 pixmap = QPixmap(str(preview))
             elif isinstance(preview, str):
@@ -124,16 +127,17 @@ class BasicGameSaveGameInfoWidget(mobase.ISaveGameInfoWidget):
                     ),
                     file=sys.stderr,
                 )
-        if pixmap:
+        if pixmap and not pixmap.isNull():
             # Scale the pixmap and show it:
             pixmap = pixmap.scaledToWidth(self._preview_width)
             self._label.setPixmap(pixmap)
             self._label.show()
         else:
             self._label.hide()
+            pixmap = None
 
         # Add metadata, file date by default.
-        metadata = self._get_metadata and self._get_metadata(save_path, save)
+        metadata = self._get_metadata(save_path, save)
         if metadata is None:
             metadata = {"File Date:": format_date(save.getCreationTime())}
         if metadata:
@@ -165,9 +169,12 @@ class BasicGameSaveGameInfoWidget(mobase.ISaveGameInfoWidget):
 class BasicGameSaveGameInfo(mobase.SaveGameInfo):
     def __init__(
         self,
-        get_preview: Callable[[Path], Path | None] | None = None,
-        get_metadata: Callable[[Path, mobase.ISaveGame], Mapping[str, str] | None]
-        | None = None,
+        get_preview: Callable[
+            [Path], Path | str | QPixmap | QImage | None
+        ] = lambda p: None,
+        get_metadata: Callable[
+            [Path, mobase.ISaveGame], Mapping[str, str] | None
+        ] = lambda p, s: None,
     ):
         """Args from: `BasicGameSaveGameInfoWidget`."""
         super().__init__()
