@@ -42,8 +42,10 @@ class CyberpunkModDataChecker(BasicModDataChecker):
         self, filetree: mobase.IFileTree
     ) -> mobase.ModDataChecker.CheckReturn:
         # fix: single root folders get traversed by Simple Installer
-        if filetree.parent() is not None:
-            return self.CheckReturn.INVALID
+        if (parent := filetree.parent()) is not None and self.dataLooksValid(
+            parent
+        ) is self.CheckReturn.FIXABLE:
+            return self.CheckReturn.FIXABLE
         if (
             res := super().dataLooksValid(filetree)
         ) is self.CheckReturn.INVALID and all(self._valid_redmod(e) for e in filetree):
