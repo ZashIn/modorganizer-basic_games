@@ -137,6 +137,8 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
 
     def _pre_run_callback(self, path: str) -> bool:
         """Deploy redmod before gamelaunch if necessary."""
+        if not self.isActive():
+            return True
         # TODO: run redmod only if started via "-modded"
         if not self._is_redmod_installed() or not self._organizer.pluginSetting(
             self.name(), "predeploy_redmod"
@@ -205,6 +207,8 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
             yield from (p.name for p in mod_path.glob("mods/*") if p.is_dir())
 
     def _set_root_builder_settings(self) -> None:
+        if not self.isActive():
+            return
         if not self._organizer.isPluginEnabled("RootBuilder"):
             qWarning("RootBuilder not enabled, but required for most mods!")
         # TODO: warning about RootBuilder
