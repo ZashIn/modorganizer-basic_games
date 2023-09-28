@@ -95,22 +95,23 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
     _root_mapping_blacklist = {GameDataPath.casefold(), "root", "bin"}
 
     _root_builder_config: dict[str, mobase.MoVariant] = {
-        "usvfsmode": True,
-        "linkmode": True,
+        "usvfsmode": False,
+        "linkmode": True,  # Use hardlinks only
         "backup": True,
         "cache": True,
         "autobuild": True,
         "redirect": True,
         "installer": False,
-        "exclusions": "archive/pc/content,BonusContent,setup_redlauncher.exe,tools",
-        "linkextensions": (
-            # redscript, red4ext
-            "dll,exe"
-            # CET
-            ",asi,lua,ini"
-            ",sqlite3,json,keep,kark,lua,otf,ttf"
-            ",toml,reds,redscrips,ts,bin,bk"  # redscript + cybercmd
-        ),
+        "exclusions": "archive/pc/content,setup_redlauncher.exe,tools",
+        "linkextensions": "*,^archive"
+        # (
+        #     # # redscript, red4ext
+        #     # "dll,exe"
+        #     # # CET
+        #     # ",asi,lua,ini"
+        #     # ",sqlite3,json,keep,kark,lua,otf,ttf"
+        #     # ",toml,reds,redscrips,ts,bin,bk"  # redscript + cybercmd
+        # ),
     }
 
     _redmod_path = Path("tools/redmod/")
