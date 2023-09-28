@@ -13,7 +13,7 @@ except ImportError:
 
 import mobase
 
-from ..basic_features import BasicModDataChecker
+from ..basic_features import BasicModDataChecker, GlobPatterns
 from ..basic_features.basic_save_game_info import (
     BasicGameSaveGame,
     BasicGameSaveGameInfo,
@@ -22,21 +22,24 @@ from ..basic_game import BasicGame
 
 
 class CyberpunkModDataChecker(BasicModDataChecker):
-    default_file_patterns = {
-        "valid": ["root", "archive", "mods"],
-        "move": {
-            # archive and ArchiveXL
-            "*.archive": "archive/pc/mod",
-            "*.xl": "archive/pc/mod",
-            "bin": "root/",  # CET, red4ext
-            # redscript
-            "engine": "root/",
-            "r6": "root/",
-            "red4ext": "root/",
-            # redmod
-            # "*": "mods",
-        },
-    }
+    def __init__(self):
+        super().__init__(
+            GlobPatterns(
+                valid=["root", "archive", "mods"],
+                move={
+                    # archive and ArchiveXL
+                    "*.archive": "archive/pc/mod",
+                    "*.xl": "archive/pc/mod",
+                    "bin": "root/",  # CET, red4ext
+                    # redscript
+                    "engine": "root/",
+                    "r6": "root/",
+                    "red4ext": "root/",
+                    # redmod
+                    # "*": "mods",
+                },
+            )
+        )
 
     def dataLooksValid(
         self, filetree: mobase.IFileTree
@@ -52,11 +55,11 @@ class CyberpunkModDataChecker(BasicModDataChecker):
             return self.CheckReturn.FIXABLE
         return res
 
-    def fix(self, filetree: mobase.IFileTree) -> mobase.IFileTree | None:
+    def fix(self, filetree: mobase.IFileTree) -> mobase.IFileTree:
         # Check for correct redmod format
         tree = super().fix(filetree) or filetree
         for entry in tree:
-            if not self._regex["valid"].match(
+            if not self._regex_patterns.valid.match(
                 entry.name().casefold()
             ) and self._valid_redmod(entry):
                 tree.move(entry, "mods/")
@@ -127,7 +130,7 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
         )
         self._featureMap[mobase.ModDataChecker] = CyberpunkModDataChecker()
 
-        def ui_init(window):
+        def ui_init(window: QMainWindow):
             self._qwindow = window
             self._set_root_builder_settings()
 
@@ -254,7 +257,7 @@ class Cyberpunk2077Game(BasicGame, mobase.IPluginFileMapper):
             else ""
         )
         redmod_installed = self._is_redmod_installed()
-        execs = []
+        execs: list[mobase.ExecutableInfo] = []
         if redmod_installed:
             # Game with redmod
             execs.append(
