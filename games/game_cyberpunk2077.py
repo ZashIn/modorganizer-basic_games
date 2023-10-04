@@ -1,10 +1,42 @@
+import typing
+
+import mobase
+
 from ..basic_game import BasicGame
+
+# MO 2.4 compatibility
+if typing.TYPE_CHECKING:
+    from PyQt6.QtCore import QDir
+else:
+    try:
+        from PyQt6.QtCore import QDir
+    except ImportError:
+        from PyQt5.QtCore import QDir
+
+
+class CyberpunkLocalSaves(mobase.LocalSavegames):
+    def __init__(self, my_game_save_dir: QDir):
+        super().__init__()
+        self._saves_dir = my_game_save_dir.absolutePath()
+
+    def mappings(self, profile_save_dir: QDir):
+        return [
+            mobase.Mapping(
+                source=profile_save_dir.absolutePath(),
+                destination=self._saves_dir,
+                is_directory=True,
+                create_target=True,
+            )
+        ]
+
+    def prepareProfile(self, profile: mobase.IProfile):
+        return profile.localSavesEnabled()
 
 
 class Cyberpunk2077Game(BasicGame):
     Name = "Cyberpunk 2077 Support Plugin"
     Author = "6788, Zash"
-    Version = "1.1.0"
+    Version = "1.2.0"
 
     GameName = "Cyberpunk 2077"
     GameShortName = "cyberpunk2077"
@@ -23,3 +55,11 @@ class Cyberpunk2077Game(BasicGame):
 
     def iniFiles(self):
         return ["UserSettings.json"]
+
+    def init(self, organizer: mobase.IOrganizer) -> bool:
+        super().init(organizer)
+
+        self._featureMap[mobase.LocalSavegames] = CyberpunkLocalSaves(
+            self.savesDirectory()
+        )
+        return True
