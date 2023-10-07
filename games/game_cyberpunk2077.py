@@ -196,7 +196,7 @@ class CyberpunkSaveGame(BasicGameSaveGame):
 class Cyberpunk2077Game(BasicGame):
     Name = "Cyberpunk 2077 Support Plugin"
     Author = "6788, Zash"
-    Version = "2.0.0"
+    Version = "2.0.1"
 
     GameName = "Cyberpunk 2077"
     GameShortName = "cyberpunk2077"
@@ -240,6 +240,15 @@ class Cyberpunk2077Game(BasicGame):
 
     def iniFiles(self):
         return ["UserSettings.json"]
+
+    def executables(self) -> list[mobase.ExecutableInfo]:
+        return [
+            # Start without REDmod launcher
+            mobase.ExecutableInfo(
+                title=self.gameName(),
+                binary=self.gameDirectory().absoluteFilePath(self.binaryName()),
+            ).withArgument("--launcher-skip -skipStartScreen")
+        ]
 
     def _onAboutToRun(self, app_path: str, wd: QDir, args: str) -> bool:
         """
