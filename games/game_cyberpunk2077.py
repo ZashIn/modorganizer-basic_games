@@ -1,9 +1,10 @@
 import json
 import re
+import shutil
 from pathlib import Path
 
 import mobase
-from PyQt6.QtCore import QDir
+from PyQt6.QtCore import QDir, qInfo
 
 from ..basic_features import BasicLocalSavegames, BasicModDataChecker, GlobPatterns
 from ..basic_features.basic_save_game_info import (
@@ -212,6 +213,10 @@ class Cyberpunk2077Game(BasicGame):
         "Game:-Cyberpunk-2077"
     )
 
+    _redmod_path = Path("tools/redmod/")
+    _redmod_binary = _redmod_path / "bin/redMod.exe"
+    _redmod_log = _redmod_path / "bin/REDmodLog.txt"
+
     def init(self, organizer: mobase.IOrganizer) -> bool:
         super().init(organizer)
         self._featureMap[mobase.LocalSavegames] = BasicLocalSavegames(
@@ -222,6 +227,8 @@ class Cyberpunk2077Game(BasicGame):
             parse_cyberpunk_save_metadata,
         )
         self._featureMap[mobase.ModDataChecker] = CyberpunkModDataChecker()
+
+        organizer.onAboutToRun(self._onAboutToRun)
         return True
 
     def listSaves(self, folder: QDir) -> list[mobase.ISaveGame]:
@@ -233,3 +240,28 @@ class Cyberpunk2077Game(BasicGame):
 
     def iniFiles(self):
         return ["UserSettings.json"]
+
+    def _onAboutToRun(self, app_path: str, wd: QDir, args: str) -> bool:
+        """
+        Copy cache files (`final.redscript` etc.) to overwrite to catch
+        overwritten game files.
+        """
+        if not self.isActive():
+            return True
+        qInfo(f"starting {app_path} in {wd} with args {args}")
+
+        data_path = Path(self.dataDirectory().absolutePath())
+        if unmapped_cache_files := self._unmapped_cache_files(data_path):
+            overwrite_path = Path(self._organizer.overwritePath())
+            for file in unmapped_cache_files:
+                dst = overwrite_path / file.relative_to(data_path)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(file, dst)
+        return True
+
+    def _unmapped_cache_files(self, data_path: Path) -> list[Path]:
+        return [
+            path
+            for file in self._organizer.findFiles("r6/cache", "*")
+            if (path := Path(file).absolute()).is_relative_to(data_path)
+        ]
