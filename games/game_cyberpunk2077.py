@@ -261,6 +261,7 @@ class Cyberpunk2077Game(BasicGame):
 
         data_path = Path(self.dataDirectory().absolutePath())
         if unmapped_cache_files := self._unmapped_cache_files(data_path):
+            qInfo(f"moving unmapped cache files to overwrite {unmapped_cache_files}")
             overwrite_path = Path(self._organizer.overwritePath())
             for file in unmapped_cache_files:
                 dst = overwrite_path / file.relative_to(data_path)
