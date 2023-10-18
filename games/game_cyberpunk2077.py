@@ -2,7 +2,7 @@ import json
 import re
 import shutil
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, TypeVar
@@ -277,7 +277,57 @@ class PluginDefaultSettings:
         return True
 
 
-class Cyberpunk2077Game(BasicGame):
+@dataclass
+class Problem:
+    is_active: Callable[[mobase.IOrganizer], bool]
+    short_description: str
+    full_description: str
+    guided_fix: Callable[[mobase.IOrganizer], Any] | None = None
+
+
+class CyberpunkPluginDiagnose(mobase.IPluginDiagnose):
+    _organizer: mobase.IOrganizer
+
+    _problems: list[Problem] = [
+        Problem(
+            lambda organizer: False,
+            "Test",
+            (
+                "Test Problem:<br>"
+                "Problem description<br>"
+                "with <code>HTML</code> formatting."
+            ),
+            guided_fix=None,
+        )
+    ]
+
+    def activeProblems(self) -> list[int]:
+        return [
+            i
+            for i, problem in enumerate(self._problems)
+            if problem.is_active(self._organizer)
+        ]
+
+    def shortDescription(self, key: int) -> str:
+        return self._problems[key].short_description
+
+    def fullDescription(self, key: int) -> str:
+        return self._problems[key].full_description
+
+    def hasGuidedFix(self, key: int) -> bool:
+        return self._problems[key].guided_fix is not None
+
+    def startGuidedFix(self, key: int) -> None:
+        try:
+            fix = self._problems[key].guided_fix
+            assert fix is not None
+            fix(self._organizer)
+        except AssertionError as e:
+            raise ValueError from e
+        return None
+
+
+class Cyberpunk2077Game(BasicGame, CyberpunkPluginDiagnose):
     Name = "Cyberpunk 2077 Support Plugin"
     Author = "6788, Zash"
     Version = "2.2.2"
@@ -302,6 +352,10 @@ class Cyberpunk2077Game(BasicGame):
     _redmod_deploy_path = Path("r6/cache/modded/")
     _redmod_deploy_args = "deploy -reportProgress"
     """Deploy arguments for `redmod.exe`, -modlist=... is added."""
+
+    def __init__(self):
+        super().__init__()
+        CyberpunkPluginDiagnose.__init__(self)
 
     def init(self, organizer: mobase.IOrganizer) -> bool:
         super().init(organizer)
