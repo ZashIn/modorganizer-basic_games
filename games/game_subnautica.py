@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import fnmatch
-import os
 from pathlib import Path
 
-import mobase
 from PyQt6.QtCore import QDir
+
+import mobase
 
 from ..basic_features import BasicModDataChecker, GlobPatterns
 from ..basic_features.basic_save_game_info import (
@@ -100,10 +100,10 @@ class SubnauticaGame(BasicGame, mobase.IPluginFileMapper):
     )
     GameSavesDirectory = r"%GAME_PATH%\SNAppData\SavedGames"
 
-    _game_extra_save_paths = [
+    _game_saves_directory_epic = (
         r"%USERPROFILE%\Appdata\LocalLow\Unknown Worlds"
         r"\Subnautica\Subnautica\SavedGames"
-    ]
+    )
 
     _forced_libraries = ["winhttp.dll"]
 
@@ -157,14 +157,15 @@ class SubnauticaGame(BasicGame, mobase.IPluginFileMapper):
             )
         ]
 
+    def savesDirectory(self) -> QDir:
+        if self.is_epic():
+            return QDir(self._game_saves_directory_epic)
+        return super().savesDirectory()
+
     def listSaves(self, folder: QDir) -> list[mobase.ISaveGame]:
         return [
-            BasicGameSaveGame(folder)
-            for save_path in (
-                folder.absolutePath(),
-                *(os.path.expandvars(p) for p in self._game_extra_save_paths),
-            )
-            for folder in Path(save_path).glob("slot*")
+            BasicGameSaveGame(path)
+            for path in Path(folder.absolutePath()).glob("slot*")
         ]
 
     def executables(self) -> list[mobase.ExecutableInfo]:
