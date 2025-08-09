@@ -2,6 +2,7 @@ import fnmatch
 import re
 from collections.abc import Iterable, Sequence
 from pathlib import PurePath
+from typing import cast
 
 import mobase
 
@@ -20,7 +21,7 @@ def parse_pattern(pattern: str) -> list[PatternPart]:
     res: list[str | re.Pattern[str]] = []
     for i, part in enumerate(parts):
         if "**" in part:
-            # TODO: **
+            # TODO: **, including children **/**/
             raise ValueError(f"** recursive pattern not supported: {pattern}")
             # raise ValueError("Invalid pattern: '**' can only be an entire path component")
         elif ".." in part:
@@ -39,8 +40,9 @@ def glob_tree(
     file_tree: mobase.IFileTree, pattern: str, path: str = ""
 ) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
     parts = parse_pattern(pattern)
-    only_dirs = pattern.endswith(("/", "\\"))
-    yield from _glob_tree(file_tree, path, parts, only_dirs)
+    yield from _glob_tree(
+        file_tree, path, parts, only_dirs=pattern.endswith(("/", "\\"))
+    )
 
 
 def _glob_tree(
@@ -50,14 +52,13 @@ def _glob_tree(
     only_dirs: bool = False,
 ) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
     i = 0
-    str_parts: list[str] = []
     for part in parts:
         if part == "*" or isinstance(part, re.Pattern):
             pattern = part
             break
-        str_parts.append(part)
         i += 1
     else:
+        str_parts = cast(Sequence[str], parts)
         # No glob patterns
         str_path = "/".join(str_parts)
         if (
@@ -71,6 +72,7 @@ def _glob_tree(
             yield f"{path}/{str_path}", entry
         return
     # Get non pattern part directly
+    str_parts = cast(Sequence[str], parts[:i])
     str_path = "/".join(str_parts)
     entry = file_tree.find("/".join(str_path), mobase.FileTreeEntry.DIRECTORY)
     if entry is None or not is_directory(entry):
