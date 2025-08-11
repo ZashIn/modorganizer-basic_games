@@ -21,7 +21,7 @@ def parse_pattern(pattern: str) -> list[PatternPart]:
     res: list[str | re.Pattern[str]] = []
     for part in parts:
         if "**" in part:
-            # TODO: **, including children **/**/
+            # TODO: implement **, including children **/**/
             raise ValueError(f"** recursive pattern not supported: {pattern}")
             # raise ValueError("Invalid pattern: '**' can only be an entire path component")
         elif ".." in part:
