@@ -19,7 +19,7 @@ def parse_pattern(pattern: str) -> list[PatternPart]:
     if not parts:
         raise ValueError(f"Unacceptable pattern: {pattern}")
     res: list[str | re.Pattern[str]] = []
-    for i, part in enumerate(parts):
+    for part in parts:
         if "**" in part:
             # TODO: **, including children **/**/
             raise ValueError(f"** recursive pattern not supported: {pattern}")
@@ -27,8 +27,9 @@ def parse_pattern(pattern: str) -> list[PatternPart]:
         elif ".." in part:
             raise ValueError(f".. parent selector not supported: {pattern}")
         elif not part == "*" and has_glob_pattern(part):
-            res[i] = re.compile(fnmatch.translate(part))
-        res[i] = part
+            res.append(re.compile(fnmatch.translate(part)))
+        else:
+            res.append(part)
     return res
 
 
