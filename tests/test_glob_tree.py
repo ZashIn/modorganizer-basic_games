@@ -1,7 +1,7 @@
 import unittest
 from enum import Enum, auto
 from pathlib import PurePath
-from typing import Iterable, Self
+from typing import Any, Iterable, Self
 from unittest.mock import MagicMock, patch
 
 
@@ -30,22 +30,12 @@ class MockFileTreeEntry:
         return isinstance(self, MockFileTree)
 
 
-def is_type(entry: MockFileTreeEntry, entry_type: MockFileTreeEntryTypes):
-    match entry_type:
-        case MockFileTreeEntryTypes.FILE:
-            return entry.isFile()
-        case MockFileTreeEntryTypes.DIRECTORY:
-            return entry.isDir()
-        case MockFileTreeEntryTypes.FILE_OR_DIRECTORY:
-            return True
-
-
 class MockFileTree(MockFileTreeEntry):
+    _entries: dict[str, MockFileTreeEntry]
+
     def __init__(self, name: str, *entries_list: MockFileTreeEntry) -> None:
         super().__init__(name)
-        self._entries: dict[str, MockFileTreeEntry] = {}
-        for entry in entries_list:
-            self._entries[entry._name] = entry
+        self._entries = {entry.name(): entry for entry in entries_list}
 
     def __hash__(self) -> int:
         return hash(self._name)
@@ -58,30 +48,38 @@ class MockFileTree(MockFileTreeEntry):
         str_path: str,
         entry_type: MockFileTreeEntryTypes = MockFileTreeEntryTypes.FILE_OR_DIRECTORY,
     ) -> Self | MockFileTreeEntry | None:
+        if not str_path:
+            return None
         path = PurePath(str_path)
-        entry: MockFileTreeEntry | None = self
+        entry = self
         for part in path.parts:
-            entry = entry._entries.get(part, None)
-            if entry is None or not is_type(entry, entry_type):
+            if not isinstance(entry, MockFileTree):
                 return None
+            entry = entry._entries.get(part, None)
+        if entry is None or not is_type(entry, entry_type):
+            return None
         return entry
 
 
-mobase_mock = MagicMock()
-# TODO: valid mock?
-mobase_mock.FileTreeEntry = MockFileTreeEntry
-# import mobase  # type: ignore # noqa: E402, F401, I001
-# from basic_features.glob_tree import glob_tree  # noqa: E402
+def is_type(entry: MockFileTreeEntry, entry_type: MockFileTreeEntryTypes) -> bool:
+    match entry_type:
+        case MockFileTreeEntryTypes.FILE:
+            return entry.isFile()
+        case MockFileTreeEntryTypes.DIRECTORY:
+            return entry.isDir()
+        case MockFileTreeEntryTypes.FILE_OR_DIRECTORY:
+            return True
 
-# def tearDownModule():
-#     if mobase_patch:
-#         mobase_patch.stop()
+
+mobase_mock = MagicMock()
+mobase_mock.FileTreeEntry = MockFileTreeEntry
+mobase_mock.IFileTree = MockFileTree
 
 
 @patch.dict("sys.modules", mobase=mobase_mock)
 class TestGlobTree(unittest.TestCase):
     def setUp(self) -> None:
-        self.test_tree = MockFileTree(
+        self.test_tree: Any = MockFileTree(
             "",
             MockFileTree(
                 "folder1",
