@@ -106,6 +106,11 @@ class TestGlobTree(unittest.TestCase):
     def test_simple_globbing(self):
         from basic_features.glob_tree import glob_tree
 
+        self.assertEqual(len(res := list(glob_tree(self.test_tree, "*.dll"))), 1)
+        path, entry = res[0]
+        self.assertEqual(path, "file1.dll")
+        self.assertEqual(entry.name(), "file1.dll")
+
         self.assertEqual(len(res := list(glob_tree(self.test_tree, "*/*.dll"))), 1)
         path, entry = res[0]
         self.assertEqual(path, "folder1/file2.dll")
