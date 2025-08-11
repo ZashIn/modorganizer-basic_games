@@ -70,16 +70,17 @@ def _glob_tree(
                 else mobase.FileTreeEntry.FILE_OR_DIRECTORY,
             )
         ) is not None:
-            yield f"{path}/{str_path}", entry
+            yield f"{path}/{str_path}" if path else str_path, entry
         return
-    # Get non pattern part directly
-    str_parts = cast(Sequence[str], parts[:i])
-    str_path = "/".join(str_parts)
-    entry = file_tree.find("/".join(str_path), mobase.FileTreeEntry.DIRECTORY)
-    if entry is None or not is_directory(entry):
-        return
-    file_tree = entry
-    path = f"{path}/{str_path}"
+    if i > 0:
+        # Get non pattern part directly
+        str_parts = cast(Sequence[str], parts[:i])
+        str_path = "/".join(str_parts)
+        entry = file_tree.find(str_path, mobase.FileTreeEntry.DIRECTORY)
+        if entry is None or not is_directory(entry):
+            return
+        file_tree = entry
+        path = f"{path}/{str_path}" if path else str_path
     rest = parts[i + 1 :]
 
     for entry in file_tree:
@@ -87,7 +88,7 @@ def _glob_tree(
 
         if pattern != "*" and not pattern.match(name):
             continue
-        str_path = f"{path}/{name}"
+        str_path = f"{path}/{name}" if path else name
         if rest:
             if is_directory(entry):
                 yield from _glob_tree(entry, str_path, rest, only_dirs)
