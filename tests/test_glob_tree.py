@@ -91,6 +91,15 @@ class TestGlobTree(unittest.TestCase):
                 MockFileTreeEntry("file1.foo"),
                 MockFileTreeEntry("file2.bar"),
             ),
+            MockFileTreeEntry("file1.dll"),
+            MockFileTreeEntry("file2.foo"),
+            MockFileTree(
+                "folder3",
+                MockFileTree(
+                    "folder4",
+                    MockFileTreeEntry("file3.dll"),
+                ),
+            ),
         )
 
     def test_no_globbing(self):
@@ -122,6 +131,30 @@ class TestGlobTree(unittest.TestCase):
         path, entry = res[0]
         self.assertEqual(path, "folder1/file2.dll")
         self.assertEqual(entry.name(), "file2.dll")
+
+    def test_unsupported_features(self):
+        from basic_features.glob_tree import glob_tree
+
+        with self.assertRaises(ValueError):
+            list(glob_tree(self.test_tree, "folder1/../*.dll"))
+
+        with self.assertRaises(ValueError):
+            list(glob_tree(self.test_tree, "**/*.dll"))
+
+    # TODO: implement **
+    # @unittest.skip("** not implemented")
+    # def test_recursive_globbing(self):
+    #     from basic_features.glob_tree import glob_tree
+
+    #     self.assertEqual(len(res := list(glob_tree(self.test_tree, "**/*.dll"))), 3)
+    #     self.assertListEqual(
+    #         [pair[0] for pair in res],
+    #         [
+    #             "file1.dll",
+    #             "folder1/file2.dll",
+    #             "folder3/folder4/file3.dll",
+    #         ],
+    #     )
 
 
 if __name__ == "__main__":
