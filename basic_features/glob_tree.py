@@ -19,14 +19,20 @@ def parse_pattern(pattern: str) -> list[PatternPart]:
     if not parts:
         raise ValueError(f"Unacceptable pattern: {pattern}")
     res: list[str | re.Pattern[str]] = []
-    for part in parts:
-        if "**" in part:
-            # TODO: implement **, including children **/**/
-            raise ValueError(f"** recursive pattern not supported: {pattern}")
-            # raise ValueError("Invalid pattern: '**' can only be an entire path component")
+    for i, part in enumerate(parts):
+        if part == "*":
+            res.append(part)
+        elif part == "**":
+            if i + 1 < len(parts) and parts[i + 1] == "**":
+                raise ValueError("Invalid pattern: '**/**' not supported!")
+            res.append(part)
+        elif "**" in part:
+            raise ValueError(
+                "Invalid pattern: '**' can only be an entire path component"
+            )
         elif ".." in part:
             raise ValueError(f".. parent selector not supported: {pattern}")
-        elif not part == "*" and has_glob_pattern(part):
+        elif has_glob_pattern(part):
             res.append(re.compile(fnmatch.translate(part)))
         else:
             res.append(part)
@@ -55,42 +61,66 @@ def _glob_tree(
     file_tree: mobase.IFileTree,
     path: str,
     parts: Sequence[str | re.Pattern[str]],
+    double_star: bool = False,
 ) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
     # path ends with /
-    i = 0
-    pattern: re.Pattern[str] | None = None
+    simple_parts = 0
+    re_pattern: re.Pattern[str] | None = None
+    doublestar_part = False
     for part in parts:
         if part == "*":
             break
-        if isinstance(part, re.Pattern):
-            pattern = part
+        if part == "**":
+            doublestar_part = True
             break
-        i += 1
+        if isinstance(part, re.Pattern):
+            re_pattern = part
+            break
+        simple_parts += 1
     else:
-        str_parts = cast(Sequence[str], parts)
         # No glob patterns
-        sub_path = "/".join(str_parts)
+        sub_path = "/".join(cast(Sequence[str], parts))
         if (entry := file_tree.find(sub_path)) is not None:
             yield path + sub_path, entry
         return
-    if i > 0:
+
+    if simple_parts:
         # Get non pattern part directly
-        str_parts = cast(Sequence[str], parts[:i])
-        sub_path = "/".join(str_parts)
+        sub_path = "/".join(cast(Sequence[str], parts[:simple_parts]))
         entry = file_tree.find(sub_path, mobase.FileTreeEntry.DIRECTORY)
         if entry is None or not is_directory(entry):
             return
         file_tree = entry
         path = f"{path}{sub_path}/"
-    rest = parts[i + 1 :]
+    rest = parts[simple_parts + 1 :]
+
+    if doublestar_part:
+        if rest:
+            # **/...
+            yield from _glob_tree(file_tree, path, rest, True)
+        else:
+            # .../**
+            yield from _all_sub_entries(file_tree, path)
+        return
 
     for entry in file_tree:
         name = entry.name()
 
-        if pattern and not pattern.match(name):
-            continue
         sub_path = path + name
-        if not rest:
-            yield sub_path, entry
-        elif is_directory(entry):
-            yield from _glob_tree(entry, sub_path + "/", rest)
+        if not re_pattern or re_pattern.match(name):
+            if not rest:
+                yield sub_path, entry
+            elif is_directory(entry):
+                yield from _glob_tree(entry, sub_path + "/", rest, double_star)
+        if double_star and is_directory(entry):
+            yield from _glob_tree(entry, sub_path + "/", parts, double_star)
+
+
+def _all_sub_entries(
+    file_tree: mobase.IFileTree, path: str
+) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
+    for entry in file_tree:
+        sub_path = path + entry.name()
+        yield sub_path, entry
+        if is_directory(entry):
+            yield from _all_sub_entries(entry, sub_path + "/")

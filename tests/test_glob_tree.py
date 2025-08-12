@@ -1,4 +1,5 @@
 import unittest
+from collections.abc import Sized
 from enum import Enum, auto
 from pathlib import PurePath
 from typing import Any, Iterable, Self
@@ -71,6 +72,12 @@ def is_type(entry: MockFileTreeEntry, entry_type: MockFileTreeEntryTypes) -> boo
             return True
 
 
+def ilen(iter: Iterable[Any]):
+    if isinstance(iter, Sized):
+        return len(iter)
+    return sum(1 for _ in iter)
+
+
 mobase_mock = MagicMock()
 mobase_mock.FileTreeEntry = MockFileTreeEntry
 mobase_mock.IFileTree = MockFileTree
@@ -79,7 +86,7 @@ mobase_mock.IFileTree = MockFileTree
 @patch.dict("sys.modules", mobase=mobase_mock)
 class TestGlobTree(unittest.TestCase):
     def setUp(self) -> None:
-        self.test_tree: Any = MockFileTree(
+        self.tree: Any = MockFileTree(
             "",
             MockFileTree(
                 "folder1",
@@ -105,29 +112,31 @@ class TestGlobTree(unittest.TestCase):
     def test_no_globbing(self):
         from basic_features.glob_tree import glob_tree
 
-        self.assertEqual(
-            len(res := list(glob_tree(self.test_tree, "folder1/file2.dll"))), 1
-        )
+        self.assertEqual(len(res := list(glob_tree(self.tree, "folder1/file2.dll"))), 1)
         path, entry = res[0]
         self.assertEqual(path, "folder1/file2.dll")
         self.assertEqual(entry.name(), "file2.dll")
+
+        self.assertEqual(ilen(glob_tree(self.tree, "file1.dll/")), 0, "folder only")
 
     def test_simple_globbing(self):
         from basic_features.glob_tree import glob_tree
 
-        self.assertEqual(len(res := list(glob_tree(self.test_tree, "*.dll"))), 1)
+        self.assertEqual(ilen(glob_tree(self.tree, "*")), 5)
+        self.assertEqual(ilen(glob_tree(self.tree, "*.*")), 2)
+        self.assertEqual(ilen(glob_tree(self.tree, "*/")), 3)
+
+        self.assertEqual(len(res := list(glob_tree(self.tree, "*.dll"))), 1)
         path, entry = res[0]
         self.assertEqual(path, "file1.dll")
         self.assertEqual(entry.name(), "file1.dll")
 
-        self.assertEqual(len(res := list(glob_tree(self.test_tree, "*/*.dll"))), 1)
+        self.assertEqual(len(res := list(glob_tree(self.tree, "*/*.dll"))), 1)
         path, entry = res[0]
         self.assertEqual(path, "folder1/file2.dll")
         self.assertEqual(entry.name(), "file2.dll")
 
-        self.assertEqual(
-            len(res := list(glob_tree(self.test_tree, "folder*/*.dll"))), 1
-        )
+        self.assertEqual(len(res := list(glob_tree(self.tree, "folder*/*.dll"))), 1)
         path, entry = res[0]
         self.assertEqual(path, "folder1/file2.dll")
         self.assertEqual(entry.name(), "file2.dll")
@@ -136,25 +145,25 @@ class TestGlobTree(unittest.TestCase):
         from basic_features.glob_tree import glob_tree
 
         with self.assertRaises(ValueError):
-            list(glob_tree(self.test_tree, "folder1/../*.dll"))
+            any(glob_tree(self.tree, "folder1/../*.dll"))
 
         with self.assertRaises(ValueError):
-            list(glob_tree(self.test_tree, "**/*.dll"))
+            any(glob_tree(self.tree, "**.dll"))
 
-    # TODO: implement **
-    # @unittest.skip("** not implemented")
-    # def test_recursive_globbing(self):
-    #     from basic_features.glob_tree import glob_tree
+        with self.assertRaises(ValueError):
+            any(glob_tree(self.tree, "**/**/*.dll"))
 
-    #     self.assertEqual(len(res := list(glob_tree(self.test_tree, "**/*.dll"))), 3)
-    #     self.assertListEqual(
-    #         [pair[0] for pair in res],
-    #         [
-    #             "file1.dll",
-    #             "folder1/file2.dll",
-    #             "folder3/folder4/file3.dll",
-    #         ],
-    #     )
+    def test_recursive_globbing(self):
+        from basic_features.glob_tree import glob_tree
+
+        self.assertListEqual(
+            [p for p, _ in glob_tree(self.tree, "**/*.dll")],
+            [
+                "folder1/file2.dll",
+                "file1.dll",
+                "folder3/folder4/file3.dll",
+            ],
+        )
 
 
 if __name__ == "__main__":
