@@ -145,6 +145,12 @@ class TestGlobTree(unittest.TestCase):
         from basic_features.glob_tree import glob_tree
 
         with self.assertRaises(ValueError):
+            any(glob_tree(self.tree, ""))
+
+        with self.assertRaises(ValueError):
+            any(glob_tree(self.tree, "/"))
+
+        with self.assertRaises(ValueError):
             any(glob_tree(self.tree, "folder1/../*.dll"))
 
         with self.assertRaises(ValueError):

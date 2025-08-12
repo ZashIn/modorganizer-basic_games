@@ -14,8 +14,11 @@ PatternPart = str | re.Pattern[str]
 
 
 def parse_pattern(pattern: str) -> list[PatternPart]:
-    pattern_path = PurePath(pattern)
-    parts = pattern_path.parts
+    if not pattern:
+        raise ValueError(f"Unacceptable pattern: {pattern}")
+    if pattern.startswith(("/", "\\")):
+        raise ValueError(f"Pattern must be relative: {pattern}")
+    parts = PurePath(pattern).parts
     if not parts:
         raise ValueError(f"Unacceptable pattern: {pattern}")
     res: list[str | re.Pattern[str]] = []
