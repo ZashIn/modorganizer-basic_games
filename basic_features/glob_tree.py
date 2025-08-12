@@ -41,56 +41,56 @@ def glob_tree(
     file_tree: mobase.IFileTree, pattern: str, path: str = ""
 ) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
     parts = parse_pattern(pattern)
-    yield from _glob_tree(
-        file_tree, path, parts, only_dirs=pattern.endswith(("/", "\\"))
-    )
+    if path and not path.endswith("/"):
+        path += "/"
+    if pattern.endswith(("/", "\\")):
+        for res_path, entry in _glob_tree(file_tree, path, parts):
+            if is_directory(entry):
+                yield res_path, entry
+    else:
+        yield from _glob_tree(file_tree, path, parts)
 
 
 def _glob_tree(
     file_tree: mobase.IFileTree,
     path: str,
     parts: Sequence[str | re.Pattern[str]],
-    only_dirs: bool = False,
 ) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
+    # path ends with /
     i = 0
+    pattern: re.Pattern[str] | None = None
     for part in parts:
-        if part == "*" or isinstance(part, re.Pattern):
+        if part == "*":
+            break
+        if isinstance(part, re.Pattern):
             pattern = part
             break
         i += 1
     else:
         str_parts = cast(Sequence[str], parts)
         # No glob patterns
-        str_path = "/".join(str_parts)
-        if (
-            entry := file_tree.find(
-                str_path,
-                mobase.FileTreeEntry.DIRECTORY
-                if only_dirs
-                else mobase.FileTreeEntry.FILE_OR_DIRECTORY,
-            )
-        ) is not None:
-            yield f"{path}/{str_path}" if path else str_path, entry
+        sub_path = "/".join(str_parts)
+        if (entry := file_tree.find(sub_path)) is not None:
+            yield path + sub_path, entry
         return
     if i > 0:
         # Get non pattern part directly
         str_parts = cast(Sequence[str], parts[:i])
-        str_path = "/".join(str_parts)
-        entry = file_tree.find(str_path, mobase.FileTreeEntry.DIRECTORY)
+        sub_path = "/".join(str_parts)
+        entry = file_tree.find(sub_path, mobase.FileTreeEntry.DIRECTORY)
         if entry is None or not is_directory(entry):
             return
         file_tree = entry
-        path = f"{path}/{str_path}" if path else str_path
+        path = f"{path}{sub_path}/"
     rest = parts[i + 1 :]
 
     for entry in file_tree:
         name = entry.name()
 
-        if pattern != "*" and not pattern.match(name):
+        if pattern and not pattern.match(name):
             continue
-        str_path = f"{path}/{name}" if path else name
-        if rest:
-            if is_directory(entry):
-                yield from _glob_tree(entry, str_path, rest, only_dirs)
-        elif not (only_dirs and is_directory(entry)):
-            yield str_path, entry
+        sub_path = path + name
+        if not rest:
+            yield sub_path, entry
+        elif is_directory(entry):
+            yield from _glob_tree(entry, sub_path + "/", rest)
