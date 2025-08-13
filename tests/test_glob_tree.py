@@ -114,11 +114,13 @@ class TestGlobTree(unittest.TestCase):
             ),
         )
 
-    def assertGlobEqual(self, pattern_res_list: Mapping[str, list[str]]):
+    def assertGlobEqual(
+        self, pattern_res_list: Mapping[str, list[str]], pre_text: str = ""
+    ):
         from basic_features.glob_tree import glob_tree
 
         for pattern, paths in pattern_res_list.items():
-            with self.subTest(f"{pattern} = {paths}"):
+            with self.subTest(f"{pre_text}{pattern} = {paths}"):
                 self.assertListEqual(
                     [p for p, _ in glob_tree(self.tree, pattern)], paths
                 )
@@ -133,7 +135,7 @@ class TestGlobTree(unittest.TestCase):
             ],
             [("folder1/file2.dll", "file2.dll")],
         )
-        self.assertEqual(ilen(glob_tree(self.tree, "file1.dll/")), 0, "folder only")
+        self.assertGlobEqual({"file1.dll/": []}, "folder only")
 
     def test_simple_globbing(self):
         from basic_features.glob_tree import glob_tree
@@ -141,7 +143,6 @@ class TestGlobTree(unittest.TestCase):
         self.assertEqual(ilen(glob_tree(self.tree, "*")), 5)
         self.assertEqual(ilen(glob_tree(self.tree, "*.*")), 2)
         self.assertEqual(ilen(glob_tree(self.tree, "*/")), 3)
-
         self.assertGlobEqual(
             {
                 "*.dll": ["file1.dll"],
@@ -159,12 +160,22 @@ class TestGlobTree(unittest.TestCase):
                     any(glob_tree(self.tree, pattern))
 
     def test_recursive_globbing(self):
+        from basic_features.glob_tree import glob_tree
+
+        with self.subTest("** = all"):
+            self.assertEqual(
+                len(res := [p for p, _ in glob_tree(self.tree, "**")]), 11, res
+            )
         self.assertGlobEqual(
             {
                 "**/*.dll": [
                     "folder1/file2.dll",
                     "file1.dll",
                     "folder3/folder4/file3.dll",
+                ],
+                "folder1/**": [
+                    "folder1/file1.foo",
+                    "folder1/file2.dll",
                 ],
             },
         )
