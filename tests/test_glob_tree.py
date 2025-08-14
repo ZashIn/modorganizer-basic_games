@@ -1,91 +1,15 @@
 import unittest
-from collections.abc import Sized
-from enum import Enum, auto
-from pathlib import PurePath
-from typing import (
-    Any,
-    Iterable,
-    Mapping,
-    Self,
-)
-from unittest.mock import MagicMock, patch
+from collections.abc import Iterable, Mapping, Sized
+from typing import Any
+from unittest.mock import patch
 
-
-# mock mobase:
-class MockFileTreeEntryTypes(Enum):
-    FILE = auto()
-    DIRECTORY = auto()
-    FILE_OR_DIRECTORY = auto()
-
-
-class MockFileTreeEntry:
-    FILE = MockFileTreeEntryTypes.FILE
-    DIRECTORY = MockFileTreeEntryTypes.DIRECTORY
-    FILE_OR_DIRECTORY = MockFileTreeEntryTypes.FILE_OR_DIRECTORY
-
-    def __init__(self, name: str) -> None:
-        self._name = name
-
-    def name(self) -> str:
-        return self._name
-
-    def isFile(self):
-        return not self.isDir()
-
-    def isDir(self):
-        return isinstance(self, MockFileTree)
-
-
-class MockFileTree(MockFileTreeEntry):
-    _entries: dict[str, MockFileTreeEntry]
-
-    def __init__(self, name: str, *entries_list: MockFileTreeEntry) -> None:
-        super().__init__(name)
-        self._entries = {entry.name(): entry for entry in entries_list}
-
-    def __hash__(self) -> int:
-        return hash(self._name)
-
-    def __iter__(self) -> Iterable[MockFileTreeEntry]:
-        yield from self._entries.values()
-
-    def find(
-        self,
-        str_path: str,
-        entry_type: MockFileTreeEntryTypes = MockFileTreeEntryTypes.FILE_OR_DIRECTORY,
-    ) -> Self | MockFileTreeEntry | None:
-        if not str_path:
-            return None
-        path = PurePath(str_path)
-        entry = self
-        for part in path.parts:
-            if not isinstance(entry, MockFileTree):
-                return None
-            entry = entry._entries.get(part, None)
-        if entry is None or not is_type(entry, entry_type):
-            return None
-        return entry
-
-
-def is_type(entry: MockFileTreeEntry, entry_type: MockFileTreeEntryTypes) -> bool:
-    match entry_type:
-        case MockFileTreeEntryTypes.FILE:
-            return entry.isFile()
-        case MockFileTreeEntryTypes.DIRECTORY:
-            return entry.isDir()
-        case MockFileTreeEntryTypes.FILE_OR_DIRECTORY:
-            return True
+from .mock_mobase import MockFileTree, MockFileTreeEntry, mobase_mock
 
 
 def ilen(iter: Iterable[Any]):
     if isinstance(iter, Sized):
         return len(iter)
     return sum(1 for _ in iter)
-
-
-mobase_mock = MagicMock()
-mobase_mock.FileTreeEntry = MockFileTreeEntry
-mobase_mock.IFileTree = MockFileTree
 
 
 @patch.dict("sys.modules", mobase=mobase_mock)

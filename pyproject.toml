@@ -41,7 +41,7 @@ lint-ruff-format = "ruff format --check ."
 lint-pyright = "pyright ."
 lint.sequence = ["lint-ruff", "lint-ruff-format", "lint-pyright"]
 lint.ignore_fail = "return_non_zero"
-test = "python -m unittest discover tests -v"
+test = "python -m unittest discover tests -v -t ."
 
 [tool.ruff.lint]
 extend-select = ["B", "Q", "I"]
