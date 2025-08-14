@@ -13,6 +13,20 @@ _glob_pattern_matcher = re.compile(r"[*?\[\]]")
 PatternPart = str | re.Pattern[str]
 
 
+def glob_tree(
+    file_tree: mobase.IFileTree, pattern: str, path: str = ""
+) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
+    parts = parse_pattern(pattern)
+    if path and not path.endswith("/"):
+        path += "/"
+    if pattern.endswith(("/", "\\")):
+        for res_path, entry in _glob_tree(file_tree, path, parts):
+            if is_directory(entry):
+                yield res_path, entry
+    else:
+        yield from _glob_tree(file_tree, path, parts)
+
+
 def parse_pattern(pattern: str) -> list[PatternPart]:
     if not pattern:
         raise ValueError(f"Unacceptable pattern: {pattern}")
@@ -46,24 +60,10 @@ def has_glob_pattern(test_str: str):
     return _glob_pattern_matcher.search(test_str)
 
 
-def glob_tree(
-    file_tree: mobase.IFileTree, pattern: str, path: str = ""
-) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
-    parts = parse_pattern(pattern)
-    if path and not path.endswith("/"):
-        path += "/"
-    if pattern.endswith(("/", "\\")):
-        for res_path, entry in _glob_tree(file_tree, path, parts):
-            if is_directory(entry):
-                yield res_path, entry
-    else:
-        yield from _glob_tree(file_tree, path, parts)
-
-
 def _glob_tree(
     file_tree: mobase.IFileTree,
     path: str,
-    parts: Sequence[str | re.Pattern[str]],
+    parts: Sequence[PatternPart],
     double_star: bool = False,
 ) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
     # path ends with /
@@ -103,7 +103,7 @@ def _glob_tree(
             yield from _glob_tree(file_tree, path, rest, True)
         else:
             # .../**
-            yield from _all_sub_entries(file_tree, path)
+            yield from all_tree_entries(file_tree, path)
         return
 
     for entry in file_tree:
@@ -119,11 +119,11 @@ def _glob_tree(
             yield from _glob_tree(entry, sub_path + "/", parts, double_star)
 
 
-def _all_sub_entries(
-    file_tree: mobase.IFileTree, path: str
+def all_tree_entries(
+    file_tree: mobase.IFileTree, path_prefix: str = ""
 ) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
     for entry in file_tree:
-        sub_path = path + entry.name()
+        sub_path = path_prefix + entry.name()
         yield sub_path, entry
         if is_directory(entry):
-            yield from _all_sub_entries(entry, sub_path + "/")
+            yield from all_tree_entries(entry, sub_path + "/")
