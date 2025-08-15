@@ -2,7 +2,7 @@ import fnmatch
 import re
 from collections.abc import Iterable, Sequence
 from pathlib import PurePath
-from typing import cast
+from typing import Literal, cast
 
 import mobase
 
@@ -10,7 +10,7 @@ from .utils import is_directory
 
 _glob_pattern_matcher = re.compile(r"[*?\[\]]")
 
-PatternPart = str | re.Pattern[str]
+PatternPart = str | re.Pattern[str] | Literal["*", "**"]
 
 
 def glob_tree(
@@ -32,11 +32,11 @@ def glob_tree(
     if path and not path.endswith("/"):
         path += "/"
     if pattern.endswith(("/", "\\")):
-        for res_path, entry in _glob_tree(file_tree, path, parts):
+        for res_path, entry in _glob_tree_parts(file_tree, parts, path):
             if is_directory(entry):
                 yield res_path, entry
     else:
-        yield from _glob_tree(file_tree, path, parts)
+        yield from _glob_tree_parts(file_tree, parts, path)
 
 
 def parse_glob_pattern(pattern: str) -> list[PatternPart]:
@@ -53,7 +53,7 @@ def parse_glob_pattern(pattern: str) -> list[PatternPart]:
             res.append(part)
         elif part == "**":
             if i + 1 < len(parts) and parts[i + 1] == "**":
-                raise ValueError("Invalid pattern: '**/**' not supported!")
+                raise ValueError("Invalid pattern: '**/**' is not supported!")
             res.append(part)
         elif "**" in part:
             raise ValueError(
@@ -72,47 +72,65 @@ def has_wildcards(test_str: str):
     return _glob_pattern_matcher.search(test_str)
 
 
-def _glob_tree(
+def _glob_tree_parts(
     file_tree: mobase.IFileTree,
-    path: str,
-    parts: Sequence[PatternPart],
-    double_star: bool = False,
+    pattern_parts: Sequence[PatternPart],
+    path: str = "",
+    recursive: bool = False,
 ) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
-    # path ends with /
+    """Glob the tree with a sequence of pattern parts, consisting of a regex pattern,
+    `"*"`, `"**"` or a literal file tree entry name, as returned by `parse_glob_pattern`.
+
+    Args:
+        file_tree: `IFileTree` test Args
+        pattern_parts: List of the path parts: regex,  `"*"`, `"**"` or name.
+        path (optional): Path to the file tree,
+            **must end with a slash ".../"**. Defaults to "".
+        recursive (optional): Search for the pattern sequence recursive in the subtree, too.
+            Same as preceding `pattern_parts` with "**". Defaults to False.
+
+    Yields:
+        (path, entry)
+
+    See Also:
+        parse_glob_pattern
+    """
     simple_parts = 0
     re_pattern: re.Pattern[str] | None = None
     doublestar_part = False
-    for part in parts:
-        if part == "*":
-            break
-        if part == "**":
-            doublestar_part = True
-            break
-        if isinstance(part, re.Pattern):
-            re_pattern = part
-            break
-        simple_parts += 1
+    for part in pattern_parts:
+        match part:
+            case "*":
+                break
+            case "**":
+                doublestar_part = True
+                break
+            case re.Pattern():
+                re_pattern = part
+                break
+            case _:
+                simple_parts += 1
     else:
-        # No glob patterns
-        sub_path = "/".join(cast(Sequence[str], parts))
+        # No wildcards
+        sub_path = "/".join(cast(Sequence[str], pattern_parts))
         if (entry := file_tree.find(sub_path)) is not None:
             yield path + sub_path, entry
         return
 
     if simple_parts:
         # Get non pattern part directly
-        sub_path = "/".join(cast(Sequence[str], parts[:simple_parts]))
+        sub_path = "/".join(cast(Sequence[str], pattern_parts[:simple_parts]))
         entry = file_tree.find(sub_path, mobase.FileTreeEntry.DIRECTORY)
         if entry is None or not is_directory(entry):
             return
         file_tree = entry
         path = f"{path}{sub_path}/"
-    rest = parts[simple_parts + 1 :]
+    rest = pattern_parts[simple_parts + 1 :]
 
     if doublestar_part:
         if rest:
             # **/...
-            yield from _glob_tree(file_tree, path, rest, True)
+            yield from _glob_tree_parts(file_tree, rest, path, True)
         else:
             # .../**
             yield from all_tree_entries(file_tree, path)
@@ -123,12 +141,13 @@ def _glob_tree(
 
         sub_path = path + name
         if not re_pattern or re_pattern.match(name):
+            # match or "*" part"
             if not rest:
                 yield sub_path, entry
             elif is_directory(entry):
-                yield from _glob_tree(entry, sub_path + "/", rest, double_star)
-        if double_star and is_directory(entry):
-            yield from _glob_tree(entry, sub_path + "/", parts, double_star)
+                yield from _glob_tree_parts(entry, rest, sub_path + "/", recursive)
+        if recursive and is_directory(entry):
+            yield from _glob_tree_parts(entry, pattern_parts, sub_path + "/", recursive)
 
 
 def all_tree_entries(
