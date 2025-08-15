@@ -16,7 +16,19 @@ PatternPart = str | re.Pattern[str]
 def glob_tree(
     file_tree: mobase.IFileTree, pattern: str, path: str = ""
 ) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
-    parts = parse_pattern(pattern)
+    """Find paths/entries matching a unix style glob pattern.
+
+    If `glob_pattern` ends with a slash ('/' or '\\'), only directories are yielded.
+
+    Args:
+        file_tree: `IFileTree`
+        _pattern: Glob pattern to match the entries path.
+        path (optional): Root path for the given file tree. Defaults to "".
+
+    Yields:
+        (path, entry)
+    """
+    parts = parse_glob_pattern(pattern)
     if path and not path.endswith("/"):
         path += "/"
     if pattern.endswith(("/", "\\")):
@@ -27,7 +39,7 @@ def glob_tree(
         yield from _glob_tree(file_tree, path, parts)
 
 
-def parse_pattern(pattern: str) -> list[PatternPart]:
+def parse_glob_pattern(pattern: str) -> list[PatternPart]:
     if not pattern:
         raise ValueError(f"Unacceptable pattern: {pattern}")
     if pattern.startswith(("/", "\\")):
@@ -49,14 +61,14 @@ def parse_pattern(pattern: str) -> list[PatternPart]:
             )
         elif ".." in part:
             raise ValueError(f".. parent selector not supported: {pattern}")
-        elif has_glob_pattern(part):
+        elif has_wildcards(part):
             res.append(re.compile(fnmatch.translate(part)))
         else:
             res.append(part)
     return res
 
 
-def has_glob_pattern(test_str: str):
+def has_wildcards(test_str: str):
     return _glob_pattern_matcher.search(test_str)
 
 
@@ -122,6 +134,15 @@ def _glob_tree(
 def all_tree_entries(
     file_tree: mobase.IFileTree, path_prefix: str = ""
 ) -> Iterable[tuple[str, mobase.FileTreeEntry]]:
+    """Get all tree entries recursively.
+
+    Args:
+        file_tree: `IFileTree`
+        path_prefix (optional): Prepend to each returned path. Defaults to "".
+
+    Yields:
+        (path, entry)
+    """
     for entry in file_tree:
         sub_path = path_prefix + entry.name()
         yield sub_path, entry
